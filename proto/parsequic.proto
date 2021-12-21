@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "github.com/TOMOFUMI-KONDO/parsequic/proto";
+
+package proto;
+
+service ParseQuic{
+  rpc Parse(ParseQuicRequest)returns(ParseQuicReply){}
+}
+
+message ParseQuicRequest{
+  bytes data = 1;
+}
+
+message ParseQuicReply{
+  bool is_long_header = 1;
+}
