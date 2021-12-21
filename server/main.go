@@ -7,14 +7,16 @@ import (
 	"log"
 	"net"
 
-	"google.golang.org/grpc"
+	"github.com/lucas-clemente/quic-go/external/protocol"
 
 	pq "parsequic/proto"
+
+	"github.com/lucas-clemente/quic-go/external/wire"
+	"google.golang.org/grpc"
 )
 
 var (
 	port int
-	cnt  = 0
 )
 
 func init() {
@@ -31,11 +33,37 @@ func newServer() *server {
 }
 
 func (s *server) Parse(ctx context.Context, req *pq.ParseQuicRequest) (*pq.ParseQuicReply, error) {
-	// TODO: parse quic using go-quic
+	hdr, _, _, err := wire.ParsePacket(req.Data, 4)
+	if err != nil {
+		fmt.Printf("failed to ParsePacket(); %v\n", err)
+		return &pq.ParseQuicReply{}, err
+	}
+
+	var pktType pq.LongHeaderPacketType
+	if hdr.Type == protocol.PacketTypeInitial {
+		pktType = pq.LongHeaderPacketType_INITIAL
+	} else if hdr.Type == protocol.PacketType0RTT {
+		pktType = pq.LongHeaderPacketType_ZERO_RTT
+	} else if hdr.Type == protocol.PacketTypeHandshake {
+		pktType = pq.LongHeaderPacketType_HANDSHAKE
+	} else if hdr.Type == protocol.PacketTypeRetry {
+		pktType = pq.LongHeaderPacketType_RETRY
+	}
 
 	rep := &pq.ParseQuicReply{
-		IsLongHeader: req.Data[0]&128 == 128,
+		IsLongHeader: hdr.IsLongHeader,
+		Type:         pktType,
+		Version:      uint32(hdr.Version),
+		DstConnID:    hdr.DestConnectionID,
+		SrcConnID:    hdr.SrcConnectionID,
 	}
+	fmt.Printf("isLongHeader:%t type:%s version:%d dstConnID:%x srcConnID:%x\n",
+		rep.IsLongHeader,
+		rep.Type,
+		rep.Version,
+		rep.DstConnID,
+		rep.SrcConnID,
+	)
 
 	return rep, nil
 }
