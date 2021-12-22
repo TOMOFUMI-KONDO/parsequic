@@ -39,20 +39,9 @@ func (s *server) Parse(ctx context.Context, req *pq.ParseQuicRequest) (*pq.Parse
 		return &pq.ParseQuicReply{}, err
 	}
 
-	var pktType pq.LongHeaderPacketType
-	if hdr.Type == protocol.PacketTypeInitial {
-		pktType = pq.LongHeaderPacketType_INITIAL
-	} else if hdr.Type == protocol.PacketType0RTT {
-		pktType = pq.LongHeaderPacketType_ZERO_RTT
-	} else if hdr.Type == protocol.PacketTypeHandshake {
-		pktType = pq.LongHeaderPacketType_HANDSHAKE
-	} else if hdr.Type == protocol.PacketTypeRetry {
-		pktType = pq.LongHeaderPacketType_RETRY
-	}
-
 	rep := &pq.ParseQuicReply{
 		IsLongHeader: hdr.IsLongHeader,
-		Type:         pktType,
+		Type:         packetType(hdr.Type),
 		Version:      uint32(hdr.Version),
 		DstConnID:    hdr.DestConnectionID,
 		SrcConnID:    hdr.SrcConnectionID,
@@ -66,6 +55,20 @@ func (s *server) Parse(ctx context.Context, req *pq.ParseQuicRequest) (*pq.Parse
 	)
 
 	return rep, nil
+}
+
+func packetType(pt protocol.PacketType) pq.PacketType {
+	if pt == protocol.PacketTypeInitial {
+		return pq.PacketType_INITIAL
+	} else if pt == protocol.PacketType0RTT {
+		return pq.PacketType_ZERO_RTT
+	} else if pt == protocol.PacketTypeHandshake {
+		return pq.PacketType_HANDSHAKE
+	} else if pt == protocol.PacketTypeRetry {
+		return pq.PacketType_RETRY
+	} else {
+		return pq.PacketType_SHORT_HEADER
+	}
 }
 
 func main() {
