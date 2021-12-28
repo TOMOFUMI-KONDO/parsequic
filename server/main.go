@@ -7,11 +7,10 @@ import (
 	"log"
 	"net"
 
-	"github.com/lucas-clemente/quic-go/external/protocol"
-
 	pq "parsequic/proto"
 
-	"github.com/lucas-clemente/quic-go/external/wire"
+	"github.com/lucas-clemente/quic-go/protocol"
+	"github.com/lucas-clemente/quic-go/wire"
 	"google.golang.org/grpc"
 )
 
@@ -39,9 +38,16 @@ func (s *server) Parse(ctx context.Context, req *pq.ParseQuicRequest) (*pq.Parse
 		return &pq.ParseQuicReply{}, err
 	}
 
+	var pt pq.PacketType
+	if hdr.IsLongHeader {
+		pt = longHeaderPacketType(hdr.Type)
+	} else {
+		pt = pq.PacketType_ONE_RTT
+	}
+
 	rep := &pq.ParseQuicReply{
 		IsLongHeader: hdr.IsLongHeader,
-		Type:         packetType(hdr.Type),
+		Type:         pt,
 		Version:      uint32(hdr.Version),
 		DstConnID:    hdr.DestConnectionID,
 		SrcConnID:    hdr.SrcConnectionID,
@@ -57,7 +63,7 @@ func (s *server) Parse(ctx context.Context, req *pq.ParseQuicRequest) (*pq.Parse
 	return rep, nil
 }
 
-func packetType(pt protocol.PacketType) pq.PacketType {
+func longHeaderPacketType(pt protocol.PacketType) pq.PacketType {
 	if pt == protocol.PacketTypeInitial {
 		return pq.PacketType_INITIAL
 	} else if pt == protocol.PacketType0RTT {
@@ -67,7 +73,7 @@ func packetType(pt protocol.PacketType) pq.PacketType {
 	} else if pt == protocol.PacketTypeRetry {
 		return pq.PacketType_RETRY
 	} else {
-		return pq.PacketType_SHORT_HEADER
+		return pq.PacketType_VERSION_NEGOTIATION
 	}
 }
 
