@@ -5,7 +5,7 @@ option go_package = "github.com/TOMOFUMI-KONDO/parsequic/proto";
 package proto;
 
 service ParseQuic{
-  rpc Parse(ParseQuicRequest)returns(ParseQuicReply){}
+  rpc Parse(ParseQuicRequest)returns(stream ParseQuicReply){}
 }
 
 message ParseQuicRequest{
