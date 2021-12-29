@@ -18,7 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ParseQuicClient interface {
-	Parse(ctx context.Context, in *ParseQuicRequest, opts ...grpc.CallOption) (ParseQuic_ParseClient, error)
+	Parse(ctx context.Context, in *ParseQuicRequest, opts ...grpc.CallOption) (*ParseQuicReply, error)
 }
 
 type parseQuicClient struct {
@@ -29,43 +29,20 @@ func NewParseQuicClient(cc grpc.ClientConnInterface) ParseQuicClient {
 	return &parseQuicClient{cc}
 }
 
-func (c *parseQuicClient) Parse(ctx context.Context, in *ParseQuicRequest, opts ...grpc.CallOption) (ParseQuic_ParseClient, error) {
-	stream, err := c.cc.NewStream(ctx, &ParseQuic_ServiceDesc.Streams[0], "/proto.ParseQuic/Parse", opts...)
+func (c *parseQuicClient) Parse(ctx context.Context, in *ParseQuicRequest, opts ...grpc.CallOption) (*ParseQuicReply, error) {
+	out := new(ParseQuicReply)
+	err := c.cc.Invoke(ctx, "/proto.ParseQuic/Parse", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &parseQuicParseClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type ParseQuic_ParseClient interface {
-	Recv() (*ParseQuicReply, error)
-	grpc.ClientStream
-}
-
-type parseQuicParseClient struct {
-	grpc.ClientStream
-}
-
-func (x *parseQuicParseClient) Recv() (*ParseQuicReply, error) {
-	m := new(ParseQuicReply)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+	return out, nil
 }
 
 // ParseQuicServer is the server API for ParseQuic service.
 // All implementations must embed UnimplementedParseQuicServer
 // for forward compatibility
 type ParseQuicServer interface {
-	Parse(*ParseQuicRequest, ParseQuic_ParseServer) error
+	Parse(context.Context, *ParseQuicRequest) (*ParseQuicReply, error)
 	mustEmbedUnimplementedParseQuicServer()
 }
 
@@ -73,8 +50,8 @@ type ParseQuicServer interface {
 type UnimplementedParseQuicServer struct {
 }
 
-func (UnimplementedParseQuicServer) Parse(*ParseQuicRequest, ParseQuic_ParseServer) error {
-	return status.Errorf(codes.Unimplemented, "method Parse not implemented")
+func (UnimplementedParseQuicServer) Parse(context.Context, *ParseQuicRequest) (*ParseQuicReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Parse not implemented")
 }
 func (UnimplementedParseQuicServer) mustEmbedUnimplementedParseQuicServer() {}
 
@@ -89,25 +66,22 @@ func RegisterParseQuicServer(s grpc.ServiceRegistrar, srv ParseQuicServer) {
 	s.RegisterService(&ParseQuic_ServiceDesc, srv)
 }
 
-func _ParseQuic_Parse_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ParseQuicRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
+func _ParseQuic_Parse_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ParseQuicRequest)
+	if err := dec(in); err != nil {
+		return nil, err
 	}
-	return srv.(ParseQuicServer).Parse(m, &parseQuicParseServer{stream})
-}
-
-type ParseQuic_ParseServer interface {
-	Send(*ParseQuicReply) error
-	grpc.ServerStream
-}
-
-type parseQuicParseServer struct {
-	grpc.ServerStream
-}
-
-func (x *parseQuicParseServer) Send(m *ParseQuicReply) error {
-	return x.ServerStream.SendMsg(m)
+	if interceptor == nil {
+		return srv.(ParseQuicServer).Parse(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.ParseQuic/Parse",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ParseQuicServer).Parse(ctx, req.(*ParseQuicRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 // ParseQuic_ServiceDesc is the grpc.ServiceDesc for ParseQuic service.
@@ -116,13 +90,12 @@ func (x *parseQuicParseServer) Send(m *ParseQuicReply) error {
 var ParseQuic_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "proto.ParseQuic",
 	HandlerType: (*ParseQuicServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
+	Methods: []grpc.MethodDesc{
 		{
-			StreamName:    "Parse",
-			Handler:       _ParseQuic_Parse_Handler,
-			ServerStreams: true,
+			MethodName: "Parse",
+			Handler:    _ParseQuic_Parse_Handler,
 		},
 	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto/parsequic.proto",
 }

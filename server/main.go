@@ -1,38 +1,26 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net"
-	pq "parsequic/proto"
 
-	"google.golang.org/grpc"
+	pq "parsequic/proto"
 
 	"github.com/lucas-clemente/quic-go/protocol"
 	"github.com/lucas-clemente/quic-go/wire"
+	"google.golang.org/grpc"
 )
 
 var (
-	port string
+	port int
 )
 
 func init() {
-	flag.StringVar(&port, "port", ":8080", "listen port")
+	flag.IntVar(&port, "port", 8080, "listen port")
 	flag.Parse()
-}
-
-func main() {
-	lis, err := net.Listen("tcp", fmt.Sprintf(port))
-	if err != nil {
-		log.Fatalf("failed to listen; %v\n", err)
-	}
-
-	s := grpc.NewServer()
-	pq.RegisterParseQuicServer(s, newServer())
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v\n", err)
-	}
 }
 
 type server struct {
@@ -43,39 +31,36 @@ func newServer() *server {
 	return &server{}
 }
 
-func (s *server) Parse(req *pq.ParseQuicRequest, stream pq.ParseQuic_ParseServer) error {
-	data := req.GetData()
-
-	for {
-		hdr, _, rest, err := wire.ParsePacket(data, 4) // 4 is sloppy
-		if err != nil {
-			return err
-		}
-
-		go func() {
-			var pt pq.PacketType
-			if hdr.IsLongHeader {
-				pt = longHeaderPacketType(hdr.Type)
-			} else {
-				pt = pq.PacketType_ONE_RTT
-			}
-
-			stream.Send(&pq.ParseQuicReply{
-				IsLongHeader: hdr.IsLongHeader,
-				Type:         pt,
-				Version:      uint32(hdr.Version),
-				DstConnID:    hdr.DestConnectionID,
-				SrcConnID:    hdr.SrcConnectionID,
-			})
-		}()
-
-		if rest == nil {
-			break
-		}
-		data = rest
+func (s *server) Parse(ctx context.Context, req *pq.ParseQuicRequest) (*pq.ParseQuicReply, error) {
+	hdr, _, _, err := wire.ParsePacket(req.Data, 4)
+	if err != nil {
+		fmt.Printf("failed to ParsePacket(); %v\n", err)
+		return &pq.ParseQuicReply{}, err
 	}
 
-	return nil
+	var pt pq.PacketType
+	if hdr.IsLongHeader {
+		pt = longHeaderPacketType(hdr.Type)
+	} else {
+		pt = pq.PacketType_ONE_RTT
+	}
+
+	rep := &pq.ParseQuicReply{
+		IsLongHeader: hdr.IsLongHeader,
+		Type:         pt,
+		Version:      uint32(hdr.Version),
+		DstConnID:    hdr.DestConnectionID,
+		SrcConnID:    hdr.SrcConnectionID,
+	}
+	fmt.Printf("isLongHeader:%t type:%s version:%d dstConnID:%x srcConnID:%x\n",
+		rep.IsLongHeader,
+		rep.Type,
+		rep.Version,
+		rep.DstConnID,
+		rep.SrcConnID,
+	)
+
+	return rep, nil
 }
 
 func longHeaderPacketType(pt protocol.PacketType) pq.PacketType {
@@ -90,4 +75,15 @@ func longHeaderPacketType(pt protocol.PacketType) pq.PacketType {
 	} else {
 		return pq.PacketType_VERSION_NEGOTIATION
 	}
+}
+
+func main() {
+	lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
+	if err != nil {
+		log.Fatalf("failed to listen; %v", err)
+	}
+
+	s := grpc.NewServer()
+	pq.RegisterParseQuicServer(s, newServer())
+	s.Serve(lis)
 }
